@@ -1,34 +1,11 @@
 {
   "targets": [
     {
-      "id": "a163ad9eeaba",
-      "name": "john",
-      "mobile": "9026559040",
-      "createdAt": "2026-08-17T12:50:07.977Z",
-      "hits": [
-        {
-          "id": "msx8erbj2zzy",
-          "ts": "2026-08-17T12:50:24.847Z",
-          "ip": "::1",
-          "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-          "gps": null,
-          "geoip": null,
-          "source": "ip"
-        },
-        {
-          "id": "msx8f1j7bbhv",
-          "ts": "2026-08-17T12:50:38.083Z",
-          "ip": "::1",
-          "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-          "gps": {
-            "lat": 26.454683,
-            "lng": 80.2026953,
-            "accuracy": 241
-          },
-          "geoip": null,
-          "source": "gps"
-        }
-      ]
+      "id": "950e1acb9474",
+      "name": "hjk",
+      "mobile": "225648",
+      "createdAt": "2026-08-17T13:19:33.929Z",
+      "hits": []
     }
   ]
 }
