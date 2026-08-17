@@ -1,0 +1,8 @@
+{
+  "name": "link-tracker",
+  "version": "1.0.0",
+  "description": "Link-based geolocation collector for authorized assessments",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.19.2" }
+}

