@@ -146,6 +146,7 @@ tr.exp-row td{background:#0e1220;font-size:12.5px;color:var(--dim);padding:12px 
     </section>
   </div>
 </main>
+  <script>
 const token = new URLSearchParams(location.search).get('token');
 const q = token ? '?token=' + token : '';
 
@@ -296,7 +297,7 @@ function renderHits(){
       <div style="margin-top:6px">UA: <span class="mono">${esc(h.ua||'—')}</span></div>
       <div class="mono" style="margin-top:4px;color:#5a6279">${new Date(h.ts).toLocaleString()}</div>
     </td></tr>`;
-    <script>
+  
   }).join('');
   $('hitRows').innerHTML = rows || `<tr><td colspan="6" class="empty">No hits recorded yet.</td></tr>`;
 }
