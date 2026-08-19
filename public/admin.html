@@ -161,20 +161,50 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&
 
 /* ---------- helpers ---------- */
 async function api(path, opts={}){
-  const r = await fetch(path+q,{headers:{'Content-Type':'application/json'},...opts});
-  if(!r.ok) throw new Error((await r.json()).error||'request failed');
-  return r.json();
+  try {
+    const r = await fetch(path+q,{headers:{'Content-Type':'application/json'},...opts});
+    if(!r.ok) {
+      let errMsg = 'request failed';
+      try { const err = await r.json(); errMsg = err.error || errMsg; } catch(_) {}
+      throw new Error(errMsg);
+    }
+    return r.json();
+  } catch(e) {
+    if(e instanceof TypeError && e.message.includes('fetch')) {
+      throw new Error('Network error: unable to reach server');
+    }
+    throw e;
+  }
 }
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const timeAgo = iso => { const s=(Date.now()-new Date(iso))/1000;
   if(s<60) return Math.floor(s)+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago';
   if(s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; };
 const shortT = iso => new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-const mapsLink = (lat,lng) => `<a class="mapslink" target="_blank" href="https://www.google.com/maps?q=${lat},${lng}">Google Maps ↗</a>`;
-const typePill = h => h.gps ? '<span class="pill gps">GPS</span>'
+const mapsLink = (lat,lng) => {
+  if(lat==null||lng==null||isNaN(lat)||isNaN(lng)) return '';
+  return `<a class="mapslink" target="_blank" href="https://www.google.com/maps?q=${lat},${lng}">Google Maps ↗</a>`;
+};
+const typePill = h => h.gps && typeof h.gps === 'object' ? '<span class="pill gps">GPS</span>'
   : h.source==='denied' ? '<span class="pill denied">DENIED</span>'
   : h.geoip ? '<span class="pill ip">IP</span>' : '<span class="pill none">—</span>';
 const colorOf = id => { const i=targets.findIndex(t=>t.id===id); return COLORS[Math.max(0,i)%COLORS.length]; };
+
+/* helper: safe coordinate extraction */
+function getCoords(h) {
+  if (!h) return null;
+  if (h.gps && typeof h.gps === 'object' && h.gps !== null) {
+    const lat = Number(h.gps.lat), lng = Number(h.gps.lng);
+    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, type:'gps', accuracy: h.gps.accuracy };
+  }
+  if (h.geoip && typeof h.geoip === 'object' && h.geoip !== null) {
+    const lat = Number(h.geoip.lat), lng = Number(h.geoip.lon);
+    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, type:'geoip' };
+  }
+  return null;
+}
+
+function safeHits(t) { return Array.isArray(t.hits) ? t.hits : []; }
 
 setInterval(()=>{ $('clock').textContent=new Date().toLocaleTimeString(); },1000);
 
@@ -211,13 +241,14 @@ function renderTargets(){
   const rows = targets
     .filter(t=>!term || [t.name,t.mobile,t.lastPlace||''].join(' ').toLowerCase().includes(term))
     .map(t=>{
-      const gpsCount=t.hits.filter(h=>h.gps).length;
-      const last=t.hits.length? timeAgo(t.hits[t.hits.length-1].ts):'—';
+      const tHits = safeHits(t);
+      const gpsCount=tHits.filter(h=>h.gps && typeof h.gps==='object').length;
+      const last=tHits.length? timeAgo(tHits[tHits.length-1].ts):'—';
       return `<tr>
         <td><b>${esc(t.name)}</b><div class="mono" style="font-size:11px;color:var(--dim)">${esc(t.mobile)}</div></td>
         <td class="place" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${esc(t.lastPlace||'')}">${esc(t.lastPlace||'—')}</td>
-        <td>${t.hits.length}</td>
+        <td>${tHits.length}</td>
         <td>${gpsCount?`<span class="pill gps">${gpsCount} fix${gpsCount>1?'es':''}</span>`:'<span class="pill none">no</span>'}</td>
         <td style="color:var(--dim);font-size:12px">${last}</td>
         <td style="white-space:nowrap">
@@ -232,34 +263,34 @@ function renderHits(){
   const term=$('searchHits').value.trim().toLowerCase();
   const fTarget=$('filter').value, onlyGps=$('onlyGps').checked;
   const list = hits.filter(h=>{
-    if(fTarget && h.target.id!==fTarget) return false;
-    if(onlyGps && !h.gps) return false;
-    if(term && ![h.target.name,h.target.mobile,h.place,h.ip].join(' ').toLowerCase().includes(term)) return false;
+    if(fTarget && (!h.target || h.target.id!==fTarget)) return false;
+    if(onlyGps && !(h.gps && typeof h.gps==='object')) return false;
+    if(term && ![h.target?.name,h.target?.mobile,h.place,h.ip].join(' ').toLowerCase().includes(term)) return false;
     return true;
   });
   const rows = list.map(h=>{
     const isNew = !known.has(h.id);
-    const pos = h.gps?[h.gps.lat,h.gps.lng]:(h.geoip?[h.geoip.lat,h.geoip.lon]:null);
+    const coord = getCoords(h);
     return `<tr class="${isNew?'flash':''}" onclick="toggleRow(this,'${h.id}')" style="cursor:pointer">
       <td style="white-space:nowrap">${shortT(h.ts)}<div class="mono" style="font-size:10.5px;color:var(--dim)">${timeAgo(h.ts)}</div></td>
-      <td><b>${esc(h.target.name)}</b><div class="mono" style="font-size:11px;color:var(--dim)">${esc(h.target.mobile)}</div></td>
+      <td><b>${esc(h.target?.name||'—')}</b><div class="mono" style="font-size:11px;color:var(--dim)">${esc(h.target?.mobile||'')}</div></td>
       <td>${typePill(h)}</td>
       <td class="place" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
           title="${esc(h.place||'')}">${esc(h.place||'—')}</td>
-      <td class="mono">${pos?pos[0].toFixed(4)+', '+pos[1].toFixed(4):'—'}</td>
-      <td class="mono">${esc(h.ip)}</td>
+      <td class="mono">${coord?coord.lat.toFixed(4)+', '+coord.lng.toFixed(4):'—'}</td>
+      <td class="mono">${esc(h.ip||'—')}</td>
     </tr>
     <tr class="exp-row" id="exp-${h.id}" style="display:none"><td colspan="6">
       <div class="row"><span>📍 <b>${esc(h.place||'Unknown location')}</b></span>
-        ${pos?`<span>${mapsLink(pos[0],pos[1])}</span>`:''}</div>
+        ${coord?`<span>${mapsLink(coord.lat,coord.lng)}</span>`:''}</div>
       <div class="row" style="margin-top:6px;gap:16px">
-        <span>Lat <b class="mono">${pos?pos[0]:'—'}</b></span>
-        <span>Lng <b class="mono">${pos?pos[1]:'—'}</b></span>
-        ${h.gps?`<span>Accuracy <b class="mono">${h.gps.accuracy?Math.round(h.gps.accuracy)+' m':'—'}</b></span>`:''}
+        <span>Lat <b class="mono">${coord?coord.lat:'—'}</b></span>
+        <span>Lng <b class="mono">${coord?coord.lng:'—'}</b></span>
+        ${coord && coord.type==='gps' && coord.accuracy!=null ? `<span>Accuracy <b class="mono">${Math.round(coord.accuracy)} m</b></span>` : ''}
         <span>ISP <b class="mono">${h.geoip?esc(h.geoip.isp):'—'}</b></span>
-        <span>IP <b class="mono">${esc(h.ip)}</b></span>
+        <span>IP <b class="mono">${esc(h.ip||'—')}</b></span>
       </div>
-      <div style="margin-top:6px">UA: <span class="mono">${esc(h.ua)}</span></div>
+      <div style="margin-top:6px">UA: <span class="mono">${esc(h.ua||'—')}</span></div>
       <div class="mono" style="margin-top:4px;color:#5a6279">${new Date(h.ts).toLocaleString()}</div>
     </td></tr>`;
   }).join('');
@@ -276,22 +307,22 @@ function renderMap(){
   markers={}; firstFit=true;
   const fTarget=$('filter').value, onlyGps=$('onlyGps').checked;
   hits.filter(h=>{
-    if(fTarget && h.target.id!==fTarget) return false;
-    if(onlyGps && !h.gps) return false;
+    if(fTarget && (!h.target || h.target.id!==fTarget)) return false;
+    if(onlyGps && !(h.gps && typeof h.gps==='object')) return false;
     return true;
   }).forEach(h=>{
-    const pos=h.gps?[h.gps.lat,h.gps.lng]:(h.geoip?[h.geoip.lat,h.geoip.lon]:null);
-    if(!pos) return;
-    const c=colorOf(h.target.id);
-    const m=L.circleMarker(pos,{radius:h.gps?9:6,color:'#fff',weight:1.5,fillColor:c,fillOpacity:.85})
+    const coord = getCoords(h);
+    if(!coord) return;
+    const c=colorOf(h.target?.id||'');
+    const m=L.circleMarker([coord.lat, coord.lng],{radius:coord.type==='gps'?9:6,color:'#fff',weight:1.5,fillColor:c,fillOpacity:.85})
       .addTo(map)
-      .bindPopup(`<b>${esc(h.target.name)}</b> <span style="color:#888">(${esc(h.target.mobile)})</span><br>`+
+      .bindPopup(`<b>${esc(h.target?.name||'Unknown')}</b> <span style="color:#888">(${esc(h.target?.mobile||'')})</span><br>`+
         `<b>${esc(h.place||'Unknown location')}</b><br>`+
-        `${h.gps?'GPS fix':'IP estimate'} · ${shortT(h.ts)} · ${timeAgo(h.ts)}<br>`+
-        (h.gps&&h.gps.accuracy?`Accuracy: <b>${Math.round(h.gps.accuracy)} m</b><br>`:'')+
-        `${mapsLink(pos[0],pos[1])}`);
+        `${coord.type==='gps'?'GPS fix':'IP estimate'} · ${shortT(h.ts)} · ${timeAgo(h.ts)}<br>`+
+        (coord.type==='gps'&&coord.accuracy!=null?`Accuracy: <b>${Math.round(coord.accuracy)} m</b><br>`:'')+
+        `${mapsLink(coord.lat,coord.lng)}`);
     markers[h.id]=m;
-    if(firstFit){ map.setView(pos,13); firstFit=false; }
+    if(firstFit){ map.setView([coord.lat, coord.lng], 13); firstFit=false; }
   });
 }
 
@@ -303,15 +334,16 @@ function renderLegend(){
 async function loadData(){
   targets = await api('/api/targets');
   targets.forEach(t=>{
-    const last=[...t.hits].reverse().find(h=>h.place);
-    t.lastPlace = last?last.place:null;
+    const tHits = safeHits(t);
+    const last = [...tHits].reverse().find(h=>h.place);
+    t.lastPlace = last ? last.place : null;
   });
   hits = await api('/api/locations');
 }
 
 function renderAll(){
-  const gpsCount=hits.filter(h=>h.gps).length;
-  const online=hits.filter(h=>Date.now()-new Date(h.ts)<5*60*1000).length;
+  const gpsCount = hits.filter(h => h.gps && typeof h.gps === 'object').length;
+  const online = hits.filter(h => Date.now() - new Date(h.ts) < 5 * 60 * 1000).length;
   animate($('stTargets'),targets.length);
   animate($('stHits'),hits.length);
   animate($('stGps'),gpsCount);
@@ -322,7 +354,7 @@ function renderAll(){
   f.value=prev;
 
   renderTargets(); renderHits(); renderMap(); renderLegend();
-  hits.forEach(h=>known.add(h.id));   // mark seen → next refresh flashes only NEW hits
+  hits.forEach(h=>known.add(h.id));
 }
 
 function animate(el,val){
@@ -342,9 +374,11 @@ async function refreshAll(){ try{ await loadData(); renderAll(); }catch(e){ cons
 function exportCSV(){
   const rows=[['time','target','mobile','type','place','lat','lng','accuracy_m','ip','isp','ua']];
   hits.forEach(h=>{
-    const pos=h.gps?[h.gps.lat,h.gps.lng]:(h.geoip?[h.geoip.lat,h.geoip.lon]:[null,null]);
-    rows.push([new Date(h.ts).toISOString(),h.target.name,h.target.mobile,h.gps?'gps':h.source,
-      h.place||'',pos[0],pos[1],h.gps?Math.round(h.gps.accuracy):'',h.ip,h.geoip?h.geoip.isp:'',h.ua]);
+    const coord = getCoords(h);
+    rows.push([new Date(h.ts).toISOString(),h.target?.name||'',h.target?.mobile||'',
+      coord?coord.type:'', h.place||'', coord?coord.lat:'', coord?coord.lng:'',
+      coord&&coord.type==='gps'&&coord.accuracy!=null?Math.round(coord.accuracy):'',
+      h.ip||'', h.geoip?.isp||'', h.ua||'']);
   });
   const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
@@ -355,7 +389,7 @@ function exportCSV(){
 
 /* start */
 (async function init(){
-  try{ await loadData(); hits.forEach(h=>known.add(h.id)); }catch(e){}
+  try{ await loadData(); hits.forEach(h=>known.add(h.id)); }catch(e){ console.error(e); }
   renderAll();
   setInterval(refreshAll,3000);
 })();
